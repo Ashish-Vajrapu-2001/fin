@@ -1,0 +1,76 @@
+{
+    "name": "PL_Master_Orchestrator",
+    "properties": {
+        "activities": [
+            {
+                "name": "Get_All_Tables",
+                "type": "Lookup",
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderStoredProcedureName": "control.sp_GetTableLoadOrder",
+                        "storedProcedureParameters": {
+                            "SourceSystemId": { "value": null }
+                        }
+                    },
+                    "dataset": { "referenceName": "DS_ControlDB", "type": "DatasetReference" },
+                    "firstRowOnly": false
+                }
+            },
+            {
+                "name": "ForEach_Table",
+                "type": "ForEach",
+                "dependsOn": [ { "activity": "Get_All_Tables", "dependencyConditions": ["Succeeded"] } ],
+                "typeProperties": {
+                    "items": { "value": "@activity('Get_All_Tables').output.value", "type": "Expression" },
+                    "isSequential": false,
+                    "batchCount": 20,
+                    "activities": [
+                        {
+                            "name": "Route_By_Load_Status",
+                            "type": "IfCondition",
+                            "typeProperties": {
+                                "expression": {
+                                    "value": "@equals(item().initial_load_completed, false)",
+                                    "type": "Expression"
+                                },
+                                "ifTrueActivities": [
+                                    {
+                                        "name": "Execute_Initial_Load",
+                                        "type": "ExecutePipeline",
+                                        "typeProperties": {
+                                            "pipeline": { "referenceName": "PL_Initial_Load_Single_Table", "type": "PipelineReference" },
+                                            "parameters": {
+                                                "table_id": "@item().table_id",
+                                                "source_system_id": "@item().source_system_id",
+                                                "schema_name": "@item().schema_name",
+                                                "table_name": "@item().table_name",
+                                                "primary_key_columns": "@item().primary_key_columns"
+                                            }
+                                        }
+                                    }
+                                ],
+                                "ifFalseActivities": [
+                                    {
+                                        "name": "Execute_Incremental_CDC",
+                                        "type": "ExecutePipeline",
+                                        "typeProperties": {
+                                            "pipeline": { "referenceName": "PL_Incremental_CDC_Single_Table", "type": "PipelineReference" },
+                                            "parameters": {
+                                                "table_id": "@item().table_id",
+                                                "source_system_id": "@item().source_system_id",
+                                                "schema_name": "@item().schema_name",
+                                                "table_name": "@item().table_name",
+                                                "primary_key_columns": "@item().primary_key_columns"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}

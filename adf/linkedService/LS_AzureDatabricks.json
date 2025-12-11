@@ -1,0 +1,15 @@
+{
+    "name": "LS_AzureDatabricks",
+    "type": "Microsoft.DataFactory/factories/linkedservices",
+    "properties": {
+        "type": "AzureDatabricks",
+        "typeProperties": {
+            "domain": "https://adb-YOUR_WORKSPACE_ID.azuredatabricks.net",
+            "accessToken": {
+                "type": "SecureString",
+                "value": "YOUR_DATABRICKS_ACCESS_TOKEN"
+            },
+            "clusterId": "YOUR_CLUSTER_ID"
+        }
+    }
+}

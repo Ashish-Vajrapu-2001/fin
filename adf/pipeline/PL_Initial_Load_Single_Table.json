@@ -1,0 +1,49 @@
+{
+    "name": "PL_Initial_Load_Single_Table",
+    "properties": {
+        "parameters": {
+            "table_id": { "type": "String" },
+            "source_system_id": { "type": "String" },
+            "schema_name": { "type": "String" },
+            "table_name": { "type": "String" },
+            "primary_key_columns": { "type": "String" }
+        },
+        "variables": { "run_id": { "type": "String" } },
+        "activities": [
+            {
+                "name": "Set_RunId",
+                "type": "SetVariable",
+                "typeProperties": { "variableName": "run_id", "value": "@pipeline().RunId" }
+            },
+            {
+                "name": "Copy_Initial_Load",
+                "type": "Copy",
+                "typeProperties": {
+                    "source": { "type": "AzureSqlSource", "sqlReaderQuery": "@concat('SELECT * FROM ', pipeline().parameters.schema_name, '.', pipeline().parameters.table_name)" },
+                    "sink": { "type": "ParquetSink" },
+                    "enableStaging": false
+                },
+                "inputs": [ { "referenceName": "DS_AzureSQL_Source", "type": "DatasetReference", "parameters": { "schema_name": "@pipeline().parameters.schema_name", "table_name": "@pipeline().parameters.table_name" } } ],
+                "outputs": [ { "referenceName": "DS_Parquet_Bronze_Initial", "type": "DatasetReference", "parameters": { "source_system_id": "@pipeline().parameters.source_system_id", "schema_name": "@pipeline().parameters.schema_name", "table_name": "@pipeline().parameters.table_name", "run_id": "@variables('run_id')" } } ]
+            },
+            {
+                "name": "Process_Initial_Load_Notebook",
+                "type": "DatabricksNotebook",
+                "dependsOn": [ { "activity": "Copy_Initial_Load", "dependencyConditions": ["Succeeded"] } ],
+                "typeProperties": {
+                    "notebookPath": "/bronze/Initial_Load_Dynamic",
+                    "baseParameters": {
+                        "table_id": "@pipeline().parameters.table_id",
+                        "source_system_id": "@pipeline().parameters.source_system_id",
+                        "schema_name": "@pipeline().parameters.schema_name",
+                        "table_name": "@pipeline().parameters.table_name",
+                        "primary_key_columns": "@pipeline().parameters.primary_key_columns",
+                        "run_id": "@variables('run_id')",
+                        "rows_copied": "@string(activity('Copy_Initial_Load').output.rowsCopied)"
+                    }
+                },
+                "linkedServiceName": { "referenceName": "LS_AzureDatabricks", "type": "LinkedServiceReference" }
+            }
+        ]
+    }
+}

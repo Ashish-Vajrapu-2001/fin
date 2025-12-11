@@ -1,0 +1,65 @@
+{
+    "name": "PL_Incremental_CDC_Single_Table",
+    "properties": {
+        "parameters": {
+            "table_id": { "type": "String" },
+            "source_system_id": { "type": "String" },
+            "schema_name": { "type": "String" },
+            "table_name": { "type": "String" },
+            "primary_key_columns": { "type": "String" }
+        },
+        "variables": { "run_id": { "type": "String" } },
+        "activities": [
+            {
+                "name": "Set_RunId",
+                "type": "SetVariable",
+                "typeProperties": { "variableName": "run_id", "value": "@pipeline().RunId" }
+            },
+            {
+                "name": "Copy_CDC_Changes",
+                "type": "Copy",
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderStoredProcedureName": "control.sp_GetCDCChanges",
+                        "storedProcedureParameters": {
+                            "SchemaName": { "value": "@pipeline().parameters.schema_name" },
+                            "TableName": { "value": "@pipeline().parameters.table_name" },
+                            "TableId": { "value": "@pipeline().parameters.table_id" }
+                        }
+                    },
+                    "sink": { "type": "ParquetSink" }
+                },
+                "inputs": [ { "referenceName": "DS_ControlDB", "type": "DatasetReference" } ],
+                "outputs": [ { "referenceName": "DS_Parquet_Bronze_Incremental", "type": "DatasetReference", "parameters": { "source_system_id": "@pipeline().parameters.source_system_id", "schema_name": "@pipeline().parameters.schema_name", "table_name": "@pipeline().parameters.table_name", "run_id": "@variables('run_id')" } } ]
+            },
+            {
+                "name": "Check_Changes_Exist",
+                "type": "IfCondition",
+                "dependsOn": [ { "activity": "Copy_CDC_Changes", "dependencyConditions": ["Succeeded"] } ],
+                "typeProperties": {
+                    "expression": { "value": "@greater(activity('Copy_CDC_Changes').output.rowsCopied, 0)", "type": "Expression" },
+                    "ifTrueActivities": [
+                        {
+                            "name": "Process_CDC_Notebook",
+                            "type": "DatabricksNotebook",
+                            "typeProperties": {
+                                "notebookPath": "/bronze/Incremental_CDC_Dynamic",
+                                "baseParameters": {
+                                    "table_id": "@pipeline().parameters.table_id",
+                                    "source_system_id": "@pipeline().parameters.source_system_id",
+                                    "schema_name": "@pipeline().parameters.schema_name",
+                                    "table_name": "@pipeline().parameters.table_name",
+                                    "primary_key_columns": "@pipeline().parameters.primary_key_columns",
+                                    "run_id": "@variables('run_id')",
+                                    "rows_copied": "@string(activity('Copy_CDC_Changes').output.rowsCopied)"
+                                }
+                            },
+                            "linkedServiceName": { "referenceName": "LS_AzureDatabricks", "type": "LinkedServiceReference" }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}

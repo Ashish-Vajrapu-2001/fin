@@ -1,0 +1,14 @@
+{
+    "name": "LS_AzureSQL_Control",
+    "type": "Microsoft.DataFactory/factories/linkedservices",
+    "properties": {
+        "type": "AzureSqlDatabase",
+        "typeProperties": {
+            "connectionString": "Data Source=adf-databricks.database.windows.net;Initial Catalog=ADF-Databricks;User ID=YOUR_SQL_USERNAME",
+            "password": {
+                "type": "SecureString",
+                "value": "YOUR_SQL_PASSWORD_HERE"
+            }
+        }
+    }
+}
